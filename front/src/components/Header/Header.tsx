@@ -1,8 +1,12 @@
 import { Link } from 'react-router';
 import './Header.css';
 import logo from '../../assets/logo.png';
+import { useTheme } from '../../hooks/useTheme';
+import { BsSun, BsMoon } from 'react-icons/bs';
 
 function Header() {
+    const { isDark, toggleTheme } = useTheme();
+
     return (
         <header className="header">
             <nav className="nav">
@@ -14,6 +18,14 @@ function Header() {
                     <Link to="/trainer">Dresseurs</Link>
                     <Link to="/soundtrack">Soundtrack</Link>
                     <Link to="/contact">Contact</Link>
+                    <button 
+                        className="theme-toggle" 
+                        onClick={toggleTheme}
+                        aria-label={isDark ? "Passer au thème clair" : "Passer au thème sombre"}
+                        title={isDark ? "Thème sombre" : "Thème clair"}
+                    >
+                        {isDark ? <BsMoon /> : <BsSun />}
+                    </button>
                 </div>
             </nav>
         </header>
