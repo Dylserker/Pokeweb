@@ -3,7 +3,7 @@ import { router } from './router/index'
 import { useTheme } from './hooks/useTheme'
 
 function App() {
-  useTheme() // Le hook gère tout
+  useTheme()
 
   return <RouterProvider router={router} />
 }
