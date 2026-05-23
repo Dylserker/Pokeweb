@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getPokemonAbilities, getPokemonItems, getPokemonMoves } from '../../../functions/pokemon'
 import type { AbilityOption, ItemOption, MoveOption } from '../../../functions/pokemon'
+import type { PokemonApiResponse } from '../../../types/pokemon'
 import './StrategicCard.css'
 
 type MoveSlot = {
@@ -22,6 +23,35 @@ type StrategicCardProps = {
   onBuildChange?: (build: StrategicBuild) => void
 }
 
+type StatData = {
+  label: string
+  value: number
+}
+
+const STAT_LABELS: Record<string, string> = {
+  hp: 'PV',
+  attack: 'Attaque',
+  defense: 'Défense',
+  'special-attack': 'Att. spé',
+  'special-defense': 'Déf. spé',
+  speed: 'Vitesse'
+}
+
+function calculateStats(baseStats: StatData[], level: number): StatData[] {
+  return baseStats.map((stat) => {
+    if (stat.label === 'PV') {
+      return {
+        ...stat,
+        value: Math.floor((2 * stat.value * level) / 100) + level + 5
+      }
+    }
+    return {
+      ...stat,
+      value: Math.floor((2 * stat.value * level) / 100) + 5
+    }
+  })
+}
+
 function StrategicCard({
   pokemonId = 25,
   title = 'Strategic Build',
@@ -31,6 +61,8 @@ function StrategicCard({
   const [items, setItems] = useState<ItemOption[]>([])
   const [abilities, setAbilities] = useState<AbilityOption[]>([])
   const [moves, setMoves] = useState<MoveOption[]>([])
+  const [baseStats, setBaseStats] = useState<StatData[]>([])
+  const [calculatedStats, setCalculatedStats] = useState<StatData[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   const [item, setItem] = useState('')
@@ -49,6 +81,26 @@ function StrategicCard({
     const loadData = async () => {
       try {
         setIsLoading(true)
+        
+        // Fetch Pokémon data for base stats
+        const pokemonResponse = await fetch(
+          `https://pokeapi.co/api/v2/pokemon/${pokemonId}`,
+          { signal: controller.signal }
+        )
+        
+        if (!pokemonResponse.ok) {
+          throw new Error('Failed to fetch Pokémon data')
+        }
+        
+        const pokemonData = (await pokemonResponse.json()) as PokemonApiResponse
+        const stats = pokemonData.stats.map((item) => ({
+          label: STAT_LABELS[item.stat.name] ?? item.stat.name,
+          value: item.base_stat
+        }))
+        
+        setBaseStats(stats)
+        setCalculatedStats(calculateStats(stats, level))
+        
         const [itemsData, abilitiesData, movesData] = await Promise.all([
           getPokemonItems(controller.signal),
           getPokemonAbilities(pokemonId, controller.signal),
@@ -74,6 +126,12 @@ function StrategicCard({
 
     return () => controller.abort()
   }, [pokemonId])
+
+  useEffect(() => {
+    if (baseStats.length > 0) {
+      setCalculatedStats(calculateStats(baseStats, level))
+    }
+  }, [level, baseStats])
 
   const moveMap = useMemo(() => {
     return new Map(moves.map((moveOption) => [moveOption.value, moveOption]))
@@ -194,6 +252,18 @@ function StrategicCard({
             onChange={(event) => handleLevelChange(event.target.value)}
           />
         </label>
+      </div>
+
+      <div className="strategic-card__stats">
+        <h3>Statistiques au niveau {level}</h3>
+        <ul className="strategic-card__stats-list">
+          {calculatedStats.map((stat) => (
+            <li key={stat.label} className="strategic-card__stat-item">
+              <span className="strategic-card__stat-label">{stat.label}</span>
+              <span className="strategic-card__stat-value">{stat.value}</span>
+            </li>
+          ))}
+        </ul>
       </div>
 
       <div className="strategic-card__movepool">

@@ -16,6 +16,7 @@ function Header() {
                 <div className="links">
                     <Link to="/">Accueil</Link>
                     <Link to="/trainer">Dresseurs</Link>
+                    <Link to="/one-day-one-pokemon">1 Pokémon / jour</Link>
                     <Link to="/soundtrack">Soundtrack</Link>
                     <Link to="/contact">Contact</Link>
                     <button 

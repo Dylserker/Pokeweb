@@ -60,6 +60,47 @@
   font-size: 1rem;
 }
 
+.strategic-card__stats {
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.strategic-card__stats h3 {
+  margin: 0 0 0.6rem 0;
+  font-size: 1rem;
+}
+
+.strategic-card__stats-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.strategic-card__stat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent-bg) 30%, transparent);
+  font-size: 0.9rem;
+}
+
+.strategic-card__stat-label {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.strategic-card__stat-value {
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 2.5rem;
+  text-align: right;
+}
+
 .strategic-card__moves {
   margin-top: 0.7rem;
   display: grid;
@@ -82,6 +123,10 @@
 
 @media (max-width: 760px) {
   .strategic-card__fields {
+    grid-template-columns: 1fr;
+  }
+
+  .strategic-card__stats-list {
     grid-template-columns: 1fr;
   }
 
