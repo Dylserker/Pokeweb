@@ -408,8 +408,7 @@ function OneDayOnePokemon() {
 								<span className="one-day-mystery-badge">PokéAPI</span>
 								<h2>Le Pokémon du jour est caché</h2>
 								<p>
-									Les indices se débloquent au fil de tes essais. Tout fonctionne sans back-end,
-									uniquement avec l’API.
+									Les indices se débloquent au fil de tes essais.
 								</p>
 								<div className="one-day-mystery-orb" aria-hidden="true">
 									?

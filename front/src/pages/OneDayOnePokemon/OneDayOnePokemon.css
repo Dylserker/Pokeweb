@@ -289,8 +289,8 @@
 }
 
 .one-day-reveal {
-	position: sticky;
-	top: 1.2rem;
+	/* Ne suit plus le scroll : reste dans le flux normal de la page */
+	position: static;
 	padding: 1rem;
 	border-radius: 22px;
 	border: 1px solid color-mix(in srgb, var(--border) 88%, #ffffff 12%);
@@ -313,7 +313,9 @@
 }
 
 .one-day-reveal .card {
-	max-width: none;
+	/* Restreindre la carte pour éviter le débordement dans la colonne de révélation */
+	max-width: 350px;
+	width: 100%;
 }
 
 .one-day-reveal-note {
