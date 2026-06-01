@@ -61,6 +61,26 @@ function getFrenchSpeciesName(speciesData: PokemonSpeciesApiResponse, fallback: 
 
 function OneDayOnePokemon() {
 	const [dailySeed] = useState(() => new Date().toISOString().slice(0, 10))
+	const [hintsUnlocked, setHintsUnlocked] = useState(() => {
+		try {
+			return localStorage.getItem(`one-day-hints-${dailySeed}`) === 'true'
+		} catch {
+			return false
+		}
+	})
+	const [persistedResult, setPersistedResult] = useState<{
+		state: 'won' | 'lost' | 'playing'
+		guesses?: GuessEntry[]
+		attemptsLeft?: number
+		statusMessage?: string
+	} | null>(() => {
+		try {
+			const raw = localStorage.getItem(`one-day-result-${dailySeed}`)
+			return raw ? JSON.parse(raw) : null
+		} catch {
+			return null
+		}
+	})
 	const [reloadToken, setReloadToken] = useState(0)
 	const [isLoading, setIsLoading] = useState(true)
 	const [errorMessage, setErrorMessage] = useState('')
@@ -87,6 +107,20 @@ function OneDayOnePokemon() {
 			setAttemptsLeft(MAX_ATTEMPTS)
 			setStatusMessage('Trouve le Pokémon du jour avec le moins d’essais possible.')
 			setGameState('loading')
+			// restore hintsUnlocked for this daily seed
+			try {
+				const saved = localStorage.getItem(`one-day-hints-${dailySeed}`) === 'true'
+				setHintsUnlocked(saved)
+			} catch {
+				setHintsUnlocked(false)
+			}
+
+			// restore persisted game result if any
+			if (persistedResult) {
+				setGuesses(persistedResult.guesses ?? [])
+				setAttemptsLeft(persistedResult.attemptsLeft ?? MAX_ATTEMPTS)
+				setStatusMessage(persistedResult.statusMessage ?? 'Trouve le Pokémon du jour avec le moins d’essais possible.')
+			}
 
 			try {
 				const countResponse = await fetch('https://pokeapi.co/api/v2/pokemon-species?limit=1', {
@@ -144,7 +178,7 @@ function OneDayOnePokemon() {
 					captureRate: speciesData.capture_rate ?? 0
 				})
 				setTargetPokemon(mapPokemonToCard(pokemonData, localizedName, localizedTypes))
-				setGameState('playing')
+				setGameState(persistedResult?.state ?? 'playing')
 			} catch (error) {
 				if ((error as Error).name === 'AbortError') {
 					return
@@ -178,7 +212,7 @@ function OneDayOnePokemon() {
 			{ label: 'Taux de capture', value: formatCaptureRate(targetSpecies.captureRate) }
 		]
 
-		const revealedCount = Math.max(0, MAX_ATTEMPTS - attemptsLeft)
+		const revealedCount = hintsUnlocked ? MAX_ATTEMPTS : Math.max(0, MAX_ATTEMPTS - attemptsLeft)
 
 		return clues.slice(0, revealedCount)
 	}, [attemptsLeft, targetSpecies])
@@ -226,22 +260,44 @@ function OneDayOnePokemon() {
 			const isCorrect = guessCard.number === targetPokemon.number
 			const sharedTypes = guessCard.types.filter((type) => targetPokemon.types.includes(type))
 
-			setGuesses((current) => [
-				...current,
-				{
-					id: guessCard.number,
-					name: guessCard.name,
-					types: guessCard.types,
-					verdict: isCorrect
-						? 'C’est le bon Pokémon.'
-						: guessCard.number < targetPokemon.number
-							? 'Le Pokémon du jour a un numéro plus élevé.'
-							: 'Le Pokémon du jour a un numéro plus faible.',
-					sharedTypes
-				}
-			])
+			const newEntry = {
+				id: guessCard.number,
+				name: guessCard.name,
+				types: guessCard.types,
+				verdict: isCorrect
+					? 'C’est le bon Pokémon.'
+					: guessCard.number < targetPokemon.number
+						? 'Le Pokémon du jour a un numéro plus élevé.'
+						: 'Le Pokémon du jour a un numéro plus faible.',
+				sharedTypes
+			}
 
+			const newGuesses = [...guesses, newEntry]
+			setGuesses(newGuesses)
 			setGuessValue('')
+
+			const resultKey = `one-day-result-${dailySeed}`
+			const nextAttemptsEstimate = attemptsLeft - 1
+
+			try {
+				const persisted: {
+					state: 'won' | 'lost' | 'playing'
+					guesses: GuessEntry[]
+					attemptsLeft: number
+					statusMessage: string
+				} = {
+					state: isCorrect ? 'won' : nextAttemptsEstimate <= 0 ? 'lost' : 'playing',
+					guesses: newGuesses,
+					attemptsLeft: Math.max(0, nextAttemptsEstimate),
+					statusMessage: isCorrect
+						? `Bravo ! Le Pokémon du jour était bien ${targetPokemon.name}.`
+						: `Raté. Il te reste ${Math.max(0, nextAttemptsEstimate)} essai${nextAttemptsEstimate > 1 ? 's' : ''}.`
+				}
+				localStorage.setItem(resultKey, JSON.stringify(persisted))
+				setPersistedResult(persisted)
+			} catch {
+				// ignore storage errors
+			}
 
 			if (isCorrect) {
 				setGameState('won')
@@ -255,6 +311,14 @@ function OneDayOnePokemon() {
 				if (nextAttempts <= 0) {
 					setGameState('lost')
 					setStatusMessage(`Partie terminée. Le Pokémon du jour était ${targetPokemon.name}.`)
+
+					// Unlock and persist hints when all attempts have been used
+					try {
+						setHintsUnlocked(true)
+						localStorage.setItem(`one-day-hints-${dailySeed}`, 'true')
+					} catch {
+						// ignore storage errors
+					}
 				} else {
 					setStatusMessage(`Raté. Il te reste ${nextAttempts} essai${nextAttempts > 1 ? 's' : ''}.`)
 				}
@@ -276,7 +340,7 @@ function OneDayOnePokemon() {
 			<main className="one-day-main">
 				<section className="one-day-hero" aria-labelledby="one-day-title">
 					<p className="one-day-kicker">Jeu du jour</p>
-					<h1 id="one-day-title">One Day One Pokémon</h1>
+					<h1 id="one-day-title">Un Jour Un Pokémon</h1>
 					<p className="one-day-subtitle">
 						Un Pokémon est choisi automatiquement chaque jour depuis PokéAPI.
 						À toi de le trouver en français avec 5 essais maximum.
