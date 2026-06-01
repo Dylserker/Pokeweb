@@ -23,6 +23,13 @@ import type {
 } from '../../types/oneDayOnePokemon'
 import './OneDayOnePokemon.css'
 
+type PersistedGameResult = {
+	state: 'won' | 'lost' | 'playing'
+	guesses?: GuessEntry[]
+	attemptsLeft?: number
+	statusMessage?: string
+}
+
 function hashString(value: string): number {
 	let hash = 2166136261
 
@@ -59,28 +66,32 @@ function getFrenchSpeciesName(speciesData: PokemonSpeciesApiResponse, fallback: 
 	return frenchEntry?.name ?? fallback
 }
 
+function getStoredGameResult(seed: string): PersistedGameResult | null {
+	try {
+		const raw = localStorage.getItem(`one-day-result-${seed}`)
+		return raw ? (JSON.parse(raw) as PersistedGameResult) : null
+	} catch {
+		return null
+	}
+}
+
+function getStoredHintCount(seed: string): number {
+	try {
+		const raw = localStorage.getItem(`one-day-hint-count-${seed}`)
+		if (!raw) {
+			return 0
+		}
+
+		const parsed = Number(raw)
+		return Number.isFinite(parsed) ? Math.max(0, Math.min(MAX_ATTEMPTS, parsed)) : 0
+	} catch {
+		return 0
+	}
+}
+
 function OneDayOnePokemon() {
 	const [dailySeed] = useState(() => new Date().toISOString().slice(0, 10))
-	const [hintsUnlocked, setHintsUnlocked] = useState(() => {
-		try {
-			return localStorage.getItem(`one-day-hints-${dailySeed}`) === 'true'
-		} catch {
-			return false
-		}
-	})
-	const [persistedResult, setPersistedResult] = useState<{
-		state: 'won' | 'lost' | 'playing'
-		guesses?: GuessEntry[]
-		attemptsLeft?: number
-		statusMessage?: string
-	} | null>(() => {
-		try {
-			const raw = localStorage.getItem(`one-day-result-${dailySeed}`)
-			return raw ? JSON.parse(raw) : null
-		} catch {
-			return null
-		}
-	})
+	const [revealedHintCount, setRevealedHintCount] = useState(() => getStoredHintCount(dailySeed))
 	const [reloadToken, setReloadToken] = useState(0)
 	const [isLoading, setIsLoading] = useState(true)
 	const [errorMessage, setErrorMessage] = useState('')
@@ -105,21 +116,16 @@ function OneDayOnePokemon() {
 			setGuesses([])
 			setGuessValue('')
 			setAttemptsLeft(MAX_ATTEMPTS)
+			setRevealedHintCount(getStoredHintCount(dailySeed))
 			setStatusMessage('Trouve le Pokémon du jour avec le moins d’essais possible.')
 			setGameState('loading')
-			// restore hintsUnlocked for this daily seed
-			try {
-				const saved = localStorage.getItem(`one-day-hints-${dailySeed}`) === 'true'
-				setHintsUnlocked(saved)
-			} catch {
-				setHintsUnlocked(false)
-			}
 
 			// restore persisted game result if any
-			if (persistedResult) {
-				setGuesses(persistedResult.guesses ?? [])
-				setAttemptsLeft(persistedResult.attemptsLeft ?? MAX_ATTEMPTS)
-				setStatusMessage(persistedResult.statusMessage ?? 'Trouve le Pokémon du jour avec le moins d’essais possible.')
+			const storedResult = getStoredGameResult(dailySeed)
+			if (storedResult) {
+				setGuesses(storedResult.guesses ?? [])
+				setAttemptsLeft(storedResult.attemptsLeft ?? MAX_ATTEMPTS)
+				setStatusMessage(storedResult.statusMessage ?? 'Trouve le Pokémon du jour avec le moins d’essais possible.')
 			}
 
 			try {
@@ -178,7 +184,7 @@ function OneDayOnePokemon() {
 					captureRate: speciesData.capture_rate ?? 0
 				})
 				setTargetPokemon(mapPokemonToCard(pokemonData, localizedName, localizedTypes))
-				setGameState(persistedResult?.state ?? 'playing')
+				setGameState(storedResult?.state ?? 'playing')
 			} catch (error) {
 				if ((error as Error).name === 'AbortError') {
 					return
@@ -201,21 +207,34 @@ function OneDayOnePokemon() {
 	}, [dailySeed, reloadToken])
 
 	const revealedHints = useMemo(() => {
-		if (!targetSpecies) {
+		if (!targetSpecies || !targetPokemon) {
 			return []
 		}
 
 		const clues = [
+			{ label: 'Type', value: targetPokemon.types.join(', ') },
 			{ label: 'Génération', value: formatGeneration(targetSpecies.generation) },
 			{ label: 'Couleur', value: formatColor(targetSpecies.color) },
 			{ label: 'Habitat', value: formatHabitat(targetSpecies.habitat) },
 			{ label: 'Taux de capture', value: formatCaptureRate(targetSpecies.captureRate) }
 		]
 
-		const revealedCount = hintsUnlocked ? MAX_ATTEMPTS : Math.max(0, MAX_ATTEMPTS - attemptsLeft)
+		return clues.slice(0, revealedHintCount)
+	}, [revealedHintCount, targetPokemon, targetSpecies])
 
-		return clues.slice(0, revealedCount)
-	}, [attemptsLeft, targetSpecies])
+	function handleRevealHints() {
+		setRevealedHintCount((currentCount) => {
+			const nextCount = Math.min(MAX_ATTEMPTS, currentCount + 1)
+
+			try {
+				localStorage.setItem(`one-day-hint-count-${dailySeed}`, String(nextCount))
+			} catch {
+				// ignore storage errors
+			}
+
+			return nextCount
+		})
+	}
 
 	async function handleGuessSubmit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault()
@@ -294,7 +313,6 @@ function OneDayOnePokemon() {
 						: `Raté. Il te reste ${Math.max(0, nextAttemptsEstimate)} essai${nextAttemptsEstimate > 1 ? 's' : ''}.`
 				}
 				localStorage.setItem(resultKey, JSON.stringify(persisted))
-				setPersistedResult(persisted)
 			} catch {
 				// ignore storage errors
 			}
@@ -312,10 +330,9 @@ function OneDayOnePokemon() {
 					setGameState('lost')
 					setStatusMessage(`Partie terminée. Le Pokémon du jour était ${targetPokemon.name}.`)
 
-					// Unlock and persist hints when all attempts have been used
+					// Persist the fact that all attempts have been used
 					try {
-						setHintsUnlocked(true)
-						localStorage.setItem(`one-day-hints-${dailySeed}`, 'true')
+						localStorage.setItem(`one-day-hint-count-${dailySeed}`, String(MAX_ATTEMPTS))
 					} catch {
 						// ignore storage errors
 					}
@@ -397,6 +414,18 @@ function OneDayOnePokemon() {
 						</p>
 
 						<div className="one-day-hints">
+							<div className="one-day-hints-header">
+								<h2>5 indices</h2>
+								{revealedHintCount < MAX_ATTEMPTS && targetPokemon && targetSpecies ? (
+									<button
+										type="button"
+										className="one-day-hints-button"
+										onClick={handleRevealHints}
+									>
+										Afficher un indice
+									</button>
+								) : null}
+							</div>
 							{revealedHints.length > 0 ? (
 								revealedHints.map((hint) => (
 									<article key={hint.label} className="one-day-hint-card">
@@ -407,7 +436,9 @@ function OneDayOnePokemon() {
 							) : (
 								<article className="one-day-hint-card one-day-hint-card--empty">
 									<span>Indices</span>
-									<strong>Commence à proposer des Pokémon pour débloquer des indices.</strong>
+									<strong>
+										Clique sur le bouton pour afficher un indice.
+									</strong>
 								</article>
 							)}
 						</div>

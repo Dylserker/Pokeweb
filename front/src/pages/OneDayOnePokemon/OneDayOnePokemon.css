@@ -166,6 +166,37 @@
 	gap: 0.85rem;
 }
 
+.one-day-hints-header {
+	grid-column: 1 / -1;
+	display: flex;
+	justify-content: space-between;
+	gap: 0.75rem;
+	align-items: center;
+	padding: 0.1rem 0;
+}
+
+.one-day-hints-header h2 {
+	margin: 0;
+	font-size: 1rem;
+}
+
+.one-day-hints-button {
+	border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+	background: linear-gradient(180deg, color-mix(in srgb, var(--accent-bg) 88%, #ffffff 12%), color-mix(in srgb, var(--bg) 94%, #ffffff 6%));
+	color: var(--text-h);
+	font: inherit;
+	font-weight: 700;
+	border-radius: 999px;
+	padding: 0.62rem 0.95rem;
+	cursor: pointer;
+	transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.one-day-hints-button:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
 .one-day-hint-card {
 	padding: 1rem;
 	border-radius: 18px;
